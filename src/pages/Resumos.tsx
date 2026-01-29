@@ -129,7 +129,7 @@ export function Resumos() {
 
               <div>
                 <h4 className="mb-2 text-sm font-semibold text-slate-700">
-                  💡 Recomendações
+                   Recomendações
                 </h4>
                 <p className="text-sm leading-relaxed text-slate-700">
                   {resumo.recomendacoes}

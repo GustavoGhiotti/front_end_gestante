@@ -4,18 +4,24 @@ import { ProtectedRoute } from './ProtectedRoute';
 import { Login } from '../pages/Login';
 import { DashboardGestante } from '../pages/DashboardGestante';
 import { DashboardMedico } from '../pages/DashboardMedico';
+import { PacienteDetalhes } from '../pages/medico/PacienteDetalhes';
+import { Alertas } from '../pages/medico/Alertas';
+import { Relatorios } from '../pages/medico/Relatorios';
 import { Relatos } from '../pages/Relatos';
 import { Resumos } from '../pages/Resumos';
 import { Medicamentos } from '../pages/Medicamentos';
 import { Consultas } from '../pages/Consultas';
 
 export function AppRoutes() {
+  console.log('AppRoutes: Renderizando rotas...');
+
   return (
     <BrowserRouter>
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
           
+          {/* ROTAS GESTANTE */}
           <Route
             path="/gestante/dashboard"
             element={
@@ -57,11 +63,36 @@ export function AppRoutes() {
             }
           />
           
+          {/* ROTAS MÉDICO */}
           <Route
             path="/medico/dashboard"
             element={
               <ProtectedRoute requiredRole="medico">
                 <DashboardMedico />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/medico/paciente/:id"
+            element={
+              <ProtectedRoute requiredRole="medico">
+                <PacienteDetalhes />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/medico/alertas"
+            element={
+              <ProtectedRoute requiredRole="medico">
+                <Alertas />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/medico/relatorios"
+            element={
+              <ProtectedRoute requiredRole="medico">
+                <Relatorios />
               </ProtectedRoute>
             }
           />
@@ -72,3 +103,5 @@ export function AppRoutes() {
     </BrowserRouter>
   );
 }
+
+export default AppRoutes;

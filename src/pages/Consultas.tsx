@@ -203,7 +203,7 @@ export function Consultas() {
         {consultasProximas.length > 0 && (
           <div>
             <h3 className="mb-4 text-lg font-semibold text-slate-800">
-              📅 Próximas Consultas
+              Próximas Consultas
             </h3>
             <div className="grid gap-4">
               {consultasProximas.map((consulta) => (
@@ -217,10 +217,10 @@ export function Consultas() {
                         {consulta.medico}
                       </h4>
                       <p className="mt-1 text-sm text-slate-600">
-                        📍 {consulta.especialidade}
+                        {consulta.especialidade}
                       </p>
                       <p className="text-sm text-slate-600">
-                        📅 {new Date(consulta.data).toLocaleDateString('pt-BR')} às{' '}
+                        {new Date(consulta.data).toLocaleDateString('pt-BR')} às{' '}
                         {consulta.horario}
                       </p>
                       <p className="text-sm text-slate-600">📌 {consulta.local}</p>

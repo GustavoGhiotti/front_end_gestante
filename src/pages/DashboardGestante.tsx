@@ -30,7 +30,7 @@ export function DashboardGestante() {
     <MainLayout>
       <div className="mb-8">
         <h2 className="mb-2 text-3xl font-bold text-slate-800">
-          Bem-vinda, {user?.nomeCompleto}! 👋
+          Bem-vinda, {user?.nomeCompleto}! 
         </h2>
         <p className="text-slate-600">
           Acompanhe sua saúde e bem-estar durante a gestação
@@ -85,7 +85,7 @@ export function DashboardGestante() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="p-6 bg-white rounded-lg shadow">
           <h3 className="mb-4 text-lg font-semibold text-slate-800">
-            📝 Últimos Relatos
+             Últimos Relatos
           </h3>
           {relatos.length === 0 ? (
             <p className="text-sm text-slate-500">
@@ -118,7 +118,7 @@ export function DashboardGestante() {
 
         <div className="p-6 bg-white rounded-lg shadow">
           <h3 className="mb-4 text-lg font-semibold text-slate-800">
-            💊 Medicamentos Atuais
+             Medicamentos Atuais
           </h3>
           {medicamentosAtivos.length === 0 ? (
             <p className="text-sm text-slate-500">

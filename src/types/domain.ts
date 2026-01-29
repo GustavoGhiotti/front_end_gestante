@@ -5,6 +5,7 @@ export interface User {
   email: string;
   role: UserRole;
   nomeCompleto: string;
+  semanasGestacao?: number;
 }
 
 export interface Gestante {
@@ -32,9 +33,9 @@ export interface RelatoDiario {
   gestanteId: string;
   data: string;
   descricao: string;
-  humor: string;
+  humor: 'feliz' | 'normal' | 'triste' | 'ansioso';
   sintomas: string[];
-  criadoEm: string;
+  criadoEm?: string;
 }
 
 export type SemaforoStatus = 'verde' | 'amarelo' | 'vermelho';
@@ -56,7 +57,16 @@ export interface Medicamento {
   nome: string;
   dosagem: string;
   frequencia: string;
-  dataInicio: string;
-  dataFim: string | null;
+  dataInicio?: string;
+  dataPrescricao?: string;
+  dataFim?: string | null;
   ativo: boolean;
+}
+
+export interface Consulta {
+  id: string;
+  gestanteId: string;
+  data: string;
+  tipo: 'ultrassom' | 'pressão' | 'rotina' | 'emergência';
+  observacoes?: string;
 }

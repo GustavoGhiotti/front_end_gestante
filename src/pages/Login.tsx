@@ -47,9 +47,18 @@ export function Login() {
         </div>
 
         <p className="p-4 mb-6 text-sm border border-blue-200 rounded text-slate-600 bg-blue-50">
-          <strong>Teste rápido:</strong>
+          <strong>Login Gestante:</strong>
           <br />
-          <span className="font-mono text-xs">gestante@example.com</span>
+          <span className="font-mono text-xs">lucia@example.com</span>
+          <br />
+          <span className="font-mono text-xs">paula@example.com</span>
+          <br />
+          <span className="font-mono text-xs">ana@example.com</span>
+          <br />
+          <span className="font-mono text-xs">maria@example.com - unico com resumo ia</span>
+          <br />
+          <br />
+          <strong>Login Medico:</strong>
           <br />
           <span className="font-mono text-xs">medico@example.com</span>
         </p>
@@ -81,7 +90,7 @@ export function Login() {
                   onChange={() => setRole('gestante')}
                   className="w-4 h-4"
                 />
-                <span className="text-sm text-slate-700">👩 Gestante</span>
+                <span className="text-sm text-slate-700">Gestante</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -91,7 +100,7 @@ export function Login() {
                   onChange={() => setRole('medico')}
                   className="w-4 h-4"
                 />
-                <span className="text-sm text-slate-700">👨‍⚕️ Médico</span>
+                <span className="text-sm text-slate-700">Médico</span>
               </label>
             </div>
           </div>
@@ -114,3 +123,5 @@ export function Login() {
     </div>
   );
 }
+
+export default Login;
