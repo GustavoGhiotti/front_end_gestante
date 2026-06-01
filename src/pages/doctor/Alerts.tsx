@@ -9,6 +9,7 @@ import { Badge } from '../../components/ui/Badge';
 import { type Alert, type AlertsKPI, type AlertSeverity, type AlertStatus } from '../../types/alerts';
 import { fetchAlerts, fetchAlertsKPI, markAlertReviewed, addAlertNote, fetchPatientDetailsBundle, type PatientDetailsBundle } from '../../services/doctorApi';
 import { relativeDate, formatTime, formatDate } from '../../lib/utils';
+import { enablePushNotifications, getNotificationPermission, sendPushTestNotification } from '../../services/notifications';
 
 // ─── Helpers de badge ─────────────────────────────────────────────────────────
 const SEVERITY_TO_LEVEL: Record<AlertSeverity, 'high' | 'medium' | 'low'> = {
@@ -283,6 +284,8 @@ export function DoctorAlerts() {
   const [chip,    setChip]    = useState<FilterChip>('todos');
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
   const [toast,   setToast]   = useState<{ msg: string; variant: 'success' | 'error' } | null>(null);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(getNotificationPermission());
+  const [testingPush, setTestingPush] = useState(false);
 
   useEffect(() => {
     fetchAlerts()
@@ -314,6 +317,27 @@ export function DoctorAlerts() {
       setToast({ msg: 'Alerta marcado como revisado.', variant: 'success' });
     } catch {
       setToast({ msg: 'Falha ao registrar revisão. Tente novamente.', variant: 'error' });
+    }
+  }
+
+  async function handleEnableNotifications() {
+    const granted = await enablePushNotifications();
+    setNotificationPermission(getNotificationPermission());
+    setToast({
+      msg: granted ? 'Notificacoes habilitadas neste dispositivo.' : 'Permissao de notificacao nao concedida.',
+      variant: granted ? 'success' : 'error',
+    });
+  }
+
+  async function handleTestNotification() {
+    setTestingPush(true);
+    try {
+      const result = await sendPushTestNotification();
+      setToast({ msg: result.detail, variant: result.delivered ? 'success' : 'error' });
+    } catch {
+      setToast({ msg: 'Falha ao enviar notificacao de teste.', variant: 'error' });
+    } finally {
+      setTestingPush(false);
     }
   }
 
@@ -387,6 +411,29 @@ export function DoctorAlerts() {
               />
             </div>
           ) : null}
+        </section>
+
+        <section className="mb-6 rounded-xl border border-brand-100 bg-brand-50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Notificacoes push do medico</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Status atual: {notificationPermission === 'unsupported' ? 'nao suportado neste navegador' : notificationPermission}.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {notificationPermission !== 'granted' ? (
+                <button type="button" onClick={handleEnableNotifications} className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700">
+                  Ativar notificacoes
+                </button>
+              ) : null}
+              {notificationPermission === 'granted' ? (
+                <button type="button" onClick={handleTestNotification} disabled={testingPush} className="rounded-lg border border-brand-200 bg-white px-3 py-2 text-xs font-semibold text-brand-700 hover:bg-brand-100 disabled:opacity-60">
+                  {testingPush ? 'Enviando teste...' : 'Enviar teste'}
+                </button>
+              ) : null}
+            </div>
+          </div>
         </section>
 
         {/* Filtros */}

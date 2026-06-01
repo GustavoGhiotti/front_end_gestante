@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
 from sqlalchemy import delete, select
 
 from app.core.security import get_password_hash
+from app.db.clinical_dataset_enrichment import enrich_clinical_dataset
 from app.db.init_db import init_db
 from app.db.session import SessionLocal
 from app.models.consulta import Consulta
@@ -369,6 +370,7 @@ def main() -> None:
             if create_demo_patient(db, doctor, index, blueprint, today):
                 created += 1
 
+        enrich_clinical_dataset(db)
         db.commit()
         total_demo = db.scalar(select(func.count()).select_from(User).where(User.email.like(f"{EMAIL_PREFIX}%@gestacare.com"))) or 0
         print(f"Pacientes demo criadas nesta execucao: {created}")

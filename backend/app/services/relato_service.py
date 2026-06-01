@@ -1,13 +1,19 @@
 import json
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.models.alerta import Alerta
 from app.models.user import User
 from app.repositories.gestante_repository import GestanteRepository
 from app.repositories.relato_repository import RelatoRepository
 from app.schemas.relato import RelatoCreateRequest, RelatoResponse
+from app.services.push_service import PushService
+
+
+HIGH_RISK_ALERT_SYMPTOMS = {"pressao alta", "visao embacada", "sangramento", "falta de ar", "convulsao"}
+MEDIUM_RISK_ALERT_SYMPTOMS = {"dor de cabeca", "cefaleia", "inchaco", "contracoes", "tontura"}
 
 
 class RelatoService:
@@ -57,6 +63,10 @@ class RelatoService:
             self.db.refresh(existing)
             return self._to_response(existing)
 
+        gestante = self.gestante_repo.get_by_user_id(user.id)
+        if not gestante:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Perfil gestacional nÃ£o encontrado.")
+
         relato = self.relato_repo.create(
             gestante_id=gestante_id,
             data_relato=payload.data,
@@ -65,9 +75,52 @@ class RelatoService:
             descricao=payload.descricao or None,
             nota_complementar=payload.nota_complementar or None,
         )
+        created_alert = self._maybe_create_doctor_alert(gestante.id, gestante.nome_completo, gestante.semanas_gestacao_atual, payload)
         self.db.commit()
         self.db.refresh(relato)
+        if created_alert:
+            PushService.notify_new_report_alert(
+                self.db,
+                gestante,
+                payload.sintomas,
+                payload.data.isoformat(),
+            )
+            self.db.commit()
         return self._to_response(relato)
+
+    def _maybe_create_doctor_alert(
+        self,
+        gestante_id: str,
+        patient_name: str,
+        gestational_weeks: int | None,
+        payload: RelatoCreateRequest,
+    ) -> bool:
+        if not payload.sintomas:
+            return False
+
+        lowered = {item.lower() for item in payload.sintomas}
+        severity = "medium"
+        if lowered & HIGH_RISK_ALERT_SYMPTOMS:
+            severity = "high"
+        elif lowered & MEDIUM_RISK_ALERT_SYMPTOMS:
+            severity = "medium"
+        else:
+            severity = "low"
+
+        self.db.add(
+            Alerta(
+                gestante_id=gestante_id,
+                patient_name=patient_name,
+                patient_ig=f"{gestational_weeks or 0}s",
+                tipo="Novo relato com sintomas",
+                severity=severity,
+                status="pending",
+                metric_label="Sintomas relatados",
+                metric_value=", ".join(payload.sintomas[:4]),
+                created_at_event=datetime.now(UTC),
+            )
+        )
+        return True
 
     @staticmethod
     def _to_response(relato) -> RelatoResponse:

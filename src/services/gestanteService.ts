@@ -118,6 +118,7 @@ export async function getMedicamentosGestanteService(_gestanteId: string): Promi
     dataFim?: string | null;
     ativo: boolean;
     lembreteAtivo?: boolean;
+    horarioLembrete?: string | null;
     tomadoHoje?: boolean;
     tomadoHojeEm?: string | null;
   }>>('/medicamentos/me');
@@ -133,6 +134,7 @@ export async function getMedicamentosGestanteService(_gestanteId: string): Promi
     dataFim: item.dataFim ?? null,
     ativo: item.ativo,
     lembreteAtivo: item.lembreteAtivo ?? false,
+    horarioLembrete: item.horarioLembrete ?? undefined,
     tomadoHoje: item.tomadoHoje ?? false,
     tomadoHojeEm: item.tomadoHojeEm ?? undefined,
   }));
@@ -140,11 +142,12 @@ export async function getMedicamentosGestanteService(_gestanteId: string): Promi
 
 export async function updateMedicamentoControleGestante(
   medicamentoId: string,
-  payload: { lembreteAtivo?: boolean; tomadoHoje?: boolean },
-): Promise<{ medicamentoId: string; lembreteAtivo: boolean; tomadoHoje: boolean; tomadoHojeEm?: string }> {
+  payload: { lembreteAtivo?: boolean; horarioLembrete?: string; tomadoHoje?: boolean },
+): Promise<{ medicamentoId: string; lembreteAtivo: boolean; horarioLembrete?: string; tomadoHoje: boolean; tomadoHojeEm?: string }> {
   const { data } = await api.patch<{
     medicamentoId: string;
     lembreteAtivo: boolean;
+    horarioLembrete?: string | null;
     tomadoHoje: boolean;
     tomadoHojeEm?: string | null;
   }>(`/medicamentos/${medicamentoId}/controle`, payload);
@@ -152,6 +155,7 @@ export async function updateMedicamentoControleGestante(
   return {
     medicamentoId: data.medicamentoId,
     lembreteAtivo: data.lembreteAtivo,
+    horarioLembrete: data.horarioLembrete ?? undefined,
     tomadoHoje: data.tomadoHoje,
     tomadoHojeEm: data.tomadoHojeEm ?? undefined,
   };

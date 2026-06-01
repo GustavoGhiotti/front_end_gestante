@@ -67,6 +67,7 @@ export interface Medicamento {
   dataFim?: string | null;
   ativo: boolean;
   lembreteAtivo?: boolean;
+  horarioLembrete?: string;
   tomadoHoje?: boolean;
   tomadoHojeEm?: string;
 }

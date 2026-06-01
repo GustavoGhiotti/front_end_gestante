@@ -21,6 +21,12 @@ from app.models.prontuario import Prontuario
 from app.models.relato import RelatoDiario
 from app.models.resumo_ia import ResumoIA
 from app.models.user import User
+from app.schemas.notifications import (
+    NotificationTestOut,
+    PushPublicKeyOut,
+    PushSubscriptionDeleteIn,
+    PushSubscriptionIn,
+)
 from app.schemas.care import (
     AICalibrationCaseOut,
     AICalibrationRunOut,
@@ -53,6 +59,7 @@ from app.schemas.care import (
     ResumoReviewIn,
 )
 from app.services.clinical_ai_service import generate_clinical_summary, get_ai_runtime_status, run_calibration_suite
+from app.services.push_service import PushService, require_push_available
 
 router = APIRouter(tags=["Care"])
 
@@ -170,6 +177,7 @@ def _map_medicamento_out(med: Medicamento) -> MedicamentoOut:
         ativo=med.ativo,
         observacoes=med.observacoes,
         lembreteAtivo=bool(med.lembrete_ativo),
+        horarioLembrete=med.horario_lembrete,
         tomadoHoje=bool(med.tomado_hoje),
         tomadoHojeEm=med.tomado_hoje_em,
     )
@@ -179,6 +187,7 @@ def _map_medicamento_controle_out(med: Medicamento) -> MedicamentoControleOut:
     return MedicamentoControleOut(
         medicamentoId=med.id,
         lembreteAtivo=bool(med.lembrete_ativo),
+        horarioLembrete=med.horario_lembrete,
         tomadoHoje=bool(med.tomado_hoje),
         tomadoHojeEm=med.tomado_hoje_em,
     )
@@ -279,6 +288,53 @@ def medicamentos_me(current_user: User = Depends(get_current_user), db: Session 
     return [_map_medicamento_out(m) for m in meds]
 
 
+@router.get("/notifications/public-key", response_model=PushPublicKeyOut)
+def notifications_public_key():
+    return PushPublicKeyOut(publicKey=PushService.public_key(), enabled=PushService.is_available())
+
+
+@router.post("/notifications/subscriptions", status_code=status.HTTP_204_NO_CONTENT)
+def register_notifications_subscription(
+    payload: PushSubscriptionIn,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    require_push_available()
+    PushService.register_subscription(
+        db,
+        current_user,
+        endpoint=payload.endpoint,
+        p256dh=payload.keys.p256dh,
+        auth=payload.keys.auth,
+        user_agent=payload.userAgent,
+    )
+    db.commit()
+
+
+@router.delete("/notifications/subscriptions", status_code=status.HTTP_204_NO_CONTENT)
+def remove_notifications_subscription(
+    payload: PushSubscriptionDeleteIn,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    PushService.remove_subscription(db, current_user, endpoint=payload.endpoint)
+    db.commit()
+
+
+@router.post("/notifications/test", response_model=NotificationTestOut)
+def send_test_notification(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    require_push_available()
+    delivered = PushService.send_test_to_current_user(db, current_user)
+    db.commit()
+    return NotificationTestOut(
+        delivered=delivered,
+        detail=("Notificacao de teste enviada." if delivered else "Nenhuma assinatura valida encontrada para este usuario."),
+    )
+
+
 @router.get("/medicamentos/me/controles", response_model=list[MedicamentoControleOut])
 def medicamentos_me_controles(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     _require_role(current_user, "gestante")
@@ -355,6 +411,10 @@ def update_medicamento_controle(
 
     if payload.lembreteAtivo is not None:
         med.lembrete_ativo = payload.lembreteAtivo
+        if not payload.lembreteAtivo:
+            med.horario_lembrete = None
+    if payload.horarioLembrete is not None:
+        med.horario_lembrete = payload.horarioLembrete or None
     if payload.tomadoHoje is not None:
         med.tomado_hoje = payload.tomadoHoje
         med.tomado_hoje_em = datetime.now(UTC) if payload.tomadoHoje else None
@@ -363,6 +423,27 @@ def update_medicamento_controle(
     db.commit()
     db.refresh(med)
     return _map_medicamento_controle_out(med)
+
+
+@router.post("/medicamentos/{medicamento_id}/lembrete-teste", response_model=NotificationTestOut)
+def send_medicamento_test_notification(
+    medicamento_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_role(current_user, "gestante")
+    require_push_available()
+    med = _get_medicamento_by_id(db, medicamento_id)
+    gestante = _get_gestante_by_user(db, current_user.id)
+    if med.gestante_id != gestante.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado a este medicamento.")
+
+    delivered = PushService.send_medication_test(db, current_user, med)
+    db.commit()
+    return NotificationTestOut(
+        delivered=delivered,
+        detail=("Notificacao de teste enviada." if delivered else "Nenhuma assinatura valida encontrada para este usuario."),
+    )
 
 
 @router.delete("/medicamentos/{medicamento_id}", status_code=status.HTTP_204_NO_CONTENT)

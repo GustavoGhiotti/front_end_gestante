@@ -23,5 +23,7 @@ class Medicamento(Base, TimestampMixin):
     ativo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     observacoes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     lembrete_ativo: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    horario_lembrete: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)
     tomado_hoje: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     tomado_hoje_em: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    ultimo_lembrete_enviado_em: Mapped[Optional[datetime]] = mapped_column(nullable=True)

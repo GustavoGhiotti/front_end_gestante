@@ -8,6 +8,7 @@ from pathlib import Path
 
 from app.core.security import get_password_hash
 from app.db import base  # noqa: F401
+from app.db.clinical_dataset_enrichment import enrich_clinical_dataset
 from app.db.session import engine
 from app.models.alerta import Alerta
 from app.models.base import Base
@@ -57,8 +58,10 @@ def init_db() -> None:
         med_columns = {row[1] for row in conn.execute(text("PRAGMA table_info(medicamentos)")).fetchall()}
         med_expected = {
             "lembrete_ativo": "BOOLEAN NOT NULL DEFAULT 0",
+            "horario_lembrete": "TEXT",
             "tomado_hoje": "BOOLEAN NOT NULL DEFAULT 0",
             "tomado_hoje_em": "DATETIME",
+            "ultimo_lembrete_enviado_em": "DATETIME",
         }
         for name, sql_type in med_expected.items():
             if name not in med_columns:
@@ -414,4 +417,5 @@ def seed_db(db: Session) -> None:
         ]
     )
 
+    enrich_clinical_dataset(db)
     db.commit()

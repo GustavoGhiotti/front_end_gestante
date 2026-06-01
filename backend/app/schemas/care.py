@@ -16,6 +16,7 @@ class MedicamentoOut(BaseModel):
     ativo: bool
     observacoes: str | None = None
     lembreteAtivo: bool = False
+    horarioLembrete: str | None = None
     tomadoHoje: bool = False
     tomadoHojeEm: datetime | None = None
 
@@ -43,12 +44,14 @@ class MedicamentoUpdateIn(BaseModel):
 
 class MedicamentoControleIn(BaseModel):
     lembreteAtivo: bool | None = None
+    horarioLembrete: str | None = None
     tomadoHoje: bool | None = None
 
 
 class MedicamentoControleOut(BaseModel):
     medicamentoId: str
     lembreteAtivo: bool = False
+    horarioLembrete: str | None = None
     tomadoHoje: bool = False
     tomadoHojeEm: datetime | None = None
 

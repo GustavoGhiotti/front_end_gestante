@@ -1,6 +1,7 @@
 import { createContext, useContext, ReactNode, useState, useEffect } from 'react';
 import { User } from '../types/domain';
 import { getCurrentUser, logout as logoutApi } from '../services/api';
+import { getNotificationPermission, syncPushSubscription } from '../services/notifications';
 
 interface AuthContextType {
   user: User | null;
@@ -23,6 +24,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     loadUser();
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    if (getNotificationPermission() !== 'granted') return;
+    syncPushSubscription().catch(() => undefined);
+  }, [user]);
 
   function logout() {
     logoutApi();

@@ -6,3 +6,4 @@ python-jose[cryptography]==3.4.0
 passlib==1.7.4
 email-validator==2.2.0
 pypdf==6.10.2
+pywebpush==2.0.3

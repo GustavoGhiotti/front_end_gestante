@@ -7,10 +7,18 @@ import { PageSpinner } from '../../components/ui/Spinner';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatDate } from '../../lib/utils';
 import { getMedicamentosGestanteService, updateMedicamentoControleGestante } from '../../services/gestanteService';
+import {
+  enablePushNotifications,
+  getNotificationPermission,
+  isPushSupported,
+  sendMedicationPushTest,
+  sendPushTestNotification,
+} from '../../services/notifications';
 import type { Medicamento } from '../../types/domain';
 
 type MedicationControlState = {
   remindersEnabled: boolean;
+  reminderTime?: string;
   takenToday: boolean;
   lastTakenAt?: string;
 };
@@ -103,6 +111,10 @@ interface DetailsModalProps {
   control: MedicationControlState;
   onClose: () => void;
   onToggleReminder: (checked: boolean) => void;
+  onReminderTimeChange: (value: string) => void;
+  onSendTest: () => void;
+  notificationReady: boolean;
+  testingNotification: boolean;
 }
 
 function MedicationDetailsModal({
@@ -110,6 +122,10 @@ function MedicationDetailsModal({
   control,
   onClose,
   onToggleReminder,
+  onReminderTimeChange,
+  onSendTest,
+  notificationReady,
+  testingNotification,
 }: DetailsModalProps) {
   const startedAt = med.dataPrescricao ?? med.dataInicio;
 
@@ -177,6 +193,29 @@ function MedicationDetailsModal({
                 className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
               />
             </label>
+            <label className="flex items-start justify-between gap-4 rounded-xl border border-white/80 bg-white px-4 py-3">
+              <div>
+                <p className="text-sm font-medium text-slate-800">Horario do lembrete</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Quando o backend estiver online, esse horario pode disparar notificacao no celular.
+                </p>
+              </div>
+              <input
+                type="time"
+                value={control.reminderTime ?? ''}
+                onChange={(event) => onReminderTimeChange(event.target.value)}
+                disabled={!control.remindersEnabled}
+                className="rounded-lg border border-slate-300 px-2 py-1 text-sm text-slate-700 disabled:bg-slate-100"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={onSendTest}
+              disabled={!notificationReady || testingNotification}
+              className="w-full rounded-xl border border-brand-200 bg-white px-4 py-3 text-left text-sm text-brand-700 transition-colors hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {testingNotification ? 'Enviando teste...' : 'Enviar notificacao de teste para este medicamento'}
+            </button>
           </div>
         </section>
 
@@ -198,6 +237,9 @@ export function GestanteMedicamentos() {
   const [error, setError] = useState<string | null>(null);
   const [selectedMed, setSelectedMed] = useState<Medicamento | null>(null);
   const [controls, setControls] = useState<Record<string, MedicationControlState>>({});
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(getNotificationPermission());
+  const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
+  const [testingNotification, setTestingNotification] = useState(false);
 
   function loadMeds() {
     if (!user) return;
@@ -217,6 +259,7 @@ export function GestanteMedicamentos() {
     for (const med of medicamentos) {
       nextControls[med.id] = {
         remindersEnabled: med.lembreteAtivo ?? false,
+        reminderTime: med.horarioLembrete,
         takenToday: med.tomadoHoje ?? false,
         lastTakenAt: med.tomadoHojeEm,
       };
@@ -227,6 +270,7 @@ export function GestanteMedicamentos() {
   async function updateMedicationControl(medId: string, nextState: MedicationControlState) {
     const saved = await updateMedicamentoControleGestante(medId, {
       lembreteAtivo: nextState.remindersEnabled,
+      horarioLembrete: nextState.reminderTime,
       tomadoHoje: nextState.takenToday,
     });
     setControls((current) => ({
@@ -242,6 +286,7 @@ export function GestanteMedicamentos() {
         ? {
             ...med,
             lembreteAtivo: saved.lembreteAtivo,
+            horarioLembrete: saved.horarioLembrete,
             tomadoHoje: saved.tomadoHoje,
             tomadoHojeEm: saved.tomadoHojeEm,
           }
@@ -255,6 +300,33 @@ export function GestanteMedicamentos() {
       ...current,
       takenToday: !current.takenToday,
     });
+  }
+
+  async function handleEnableNotifications() {
+    const granted = await enablePushNotifications();
+    const nextPermission = getNotificationPermission();
+    setNotificationPermission(nextPermission);
+    setNotificationMessage(granted ? 'Notificacoes habilitadas neste dispositivo.' : 'Permissao de notificacao nao concedida.');
+  }
+
+  async function handleSendGeneralTest() {
+    setTestingNotification(true);
+    try {
+      const result = await sendPushTestNotification();
+      setNotificationMessage(result.detail);
+    } finally {
+      setTestingNotification(false);
+    }
+  }
+
+  async function handleSendMedicationTest(med: Medicamento) {
+    setTestingNotification(true);
+    try {
+      const result = await sendMedicationPushTest(med.id);
+      setNotificationMessage(result.detail);
+    } finally {
+      setTestingNotification(false);
+    }
   }
 
   const ativos = useMemo(() => medicamentos.filter((med) => med.ativo), [medicamentos]);
@@ -271,6 +343,7 @@ export function GestanteMedicamentos() {
   const selectedControl = selectedMed
     ? controls[selectedMed.id] ?? { remindersEnabled: false, takenToday: false }
     : { remindersEnabled: false, takenToday: false };
+  const notificationReady = notificationPermission === 'granted';
 
   return (
     <GestanteLayout>
@@ -303,6 +376,25 @@ export function GestanteMedicamentos() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                 </svg>
                 <span>As prescricoes sao definidas pelo seu medico. Os lembretes e marcacoes abaixo sao opcionais e servem apenas para sua organizacao pessoal.</span>
+              </div>
+              <div className="rounded-xl border border-brand-100 bg-brand-50 p-4">
+                <p className="text-sm font-semibold text-slate-800">Notificacoes no celular</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Status atual: {notificationPermission === 'unsupported' ? 'nao suportado neste navegador' : notificationPermission}.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {isPushSupported() && notificationPermission !== 'granted' ? (
+                    <button type="button" onClick={handleEnableNotifications} className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700">
+                      Ativar notificacoes
+                    </button>
+                  ) : null}
+                  {notificationPermission === 'granted' ? (
+                    <button type="button" onClick={handleSendGeneralTest} className="rounded-lg border border-brand-200 bg-white px-3 py-2 text-xs font-semibold text-brand-700 hover:bg-brand-100">
+                      Enviar teste geral
+                    </button>
+                  ) : null}
+                </div>
+                {notificationMessage ? <p className="mt-3 text-xs text-slate-500">{notificationMessage}</p> : null}
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
@@ -379,6 +471,15 @@ export function GestanteMedicamentos() {
               remindersEnabled: checked,
             })
           }
+          onReminderTimeChange={(value) =>
+            updateMedicationControl(selectedMed.id, {
+              ...selectedControl,
+              reminderTime: value,
+            })
+          }
+          onSendTest={() => handleSendMedicationTest(selectedMed)}
+          notificationReady={notificationReady}
+          testingNotification={testingNotification}
         />
       )}
     </GestanteLayout>

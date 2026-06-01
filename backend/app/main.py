@@ -13,6 +13,7 @@ from app.db.init_db import init_db, seed_db
 from app.db.session import SessionLocal
 from app.models.user import User
 from app.services.ollama_runtime import ensure_ollama_running, shutdown_managed_ollama, warmup_ollama_model
+from app.services.push_service import PushService
 
 app = FastAPI(title=settings.app_name, version="0.1.0")
 
@@ -44,6 +45,7 @@ def on_startup() -> None:
             seed_db(db)
     finally:
         db.close()
+    PushService.start_scheduler()
 
 
 @app.on_event("shutdown")

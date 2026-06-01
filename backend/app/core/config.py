@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     ollama_num_thread: int = 6
     ai_raw_sources_dir: str = str(Path.home() / "OneDrive" / "Documentos" / "BaseIA")
     ai_knowledge_dir: str = str(BACKEND_DIR / "app" / "ai" / "knowledge")
+    notifications_enabled: bool = True
+    web_push_subject: str = "mailto:gestacare@example.com"
+    vapid_private_key_path: str = str(BACKEND_DIR / ".vapid" / "private_key.pem")
+    vapid_public_key_path: str = str(BACKEND_DIR / ".vapid" / "public_key.txt")
+    medication_reminder_poll_seconds: int = 30
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
