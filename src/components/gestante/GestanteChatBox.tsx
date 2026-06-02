@@ -114,8 +114,10 @@ export function GestanteChatBox({ compact = false, className }: GestanteChatBoxP
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [input, setInput] = useState('');
+  const [showThreadList, setShowThreadList] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
   const welcomeName = useMemo(() => user?.nomeCompleto?.split(' ')[0] ?? 'gestante', [user]);
+  const activeThread = threads.find((thread) => thread.id === activeThreadId) ?? null;
 
   useEffect(() => {
     Promise.all([getGestanteChatThreads(), getGestanteChatStatus()])
@@ -131,6 +133,7 @@ export function GestanteChatBox({ compact = false, className }: GestanteChatBoxP
 
   async function handleSelectThread(threadId: string) {
     if (threadId === activeThreadId || sending) return;
+    setShowThreadList(false);
     setActiveThreadId(threadId);
     setLoading(true);
     setError(null);
@@ -151,6 +154,7 @@ export function GestanteChatBox({ compact = false, className }: GestanteChatBoxP
       setThreads((current) => [thread, ...current.filter((item) => item.id !== thread.id)]);
       setActiveThreadId(thread.id);
       setMessages([]);
+      setShowThreadList(false);
     } catch {
       setError('Nao foi possivel iniciar uma nova conversa.');
     }
@@ -232,8 +236,77 @@ export function GestanteChatBox({ compact = false, className }: GestanteChatBoxP
         </aside>
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
-      <div className={cn('flex-1 overflow-y-auto bg-[linear-gradient(180deg,_rgba(248,250,252,0.82)_0%,_rgba(255,255,255,1)_100%)]', compact ? 'px-3 py-3' : 'px-4 py-5')}>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      {compact && (
+        <div className="border-b border-slate-100 bg-slate-50/80 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowThreadList((current) => !current)}
+              className="flex min-w-0 flex-1 items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-xs text-slate-600 transition hover:border-slate-300"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-slate-800">
+                  {activeThread?.title || 'Nova conversa'}
+                </p>
+                <p className="truncate text-[11px] text-slate-400">
+                  {activeThread ? `${activeThread.messageCount} mensagens` : 'Sem mensagens ainda'}
+                </p>
+              </div>
+              <svg
+                className={cn('h-4 w-4 flex-shrink-0 text-slate-400 transition-transform', showThreadList && 'rotate-180')}
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.51a.75.75 0 01-1.08 0l-4.25-4.51a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+              </svg>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleNewThread}
+              disabled={sending}
+              className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 px-3 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:opacity-60"
+            >
+              Novo
+            </button>
+          </div>
+
+          {showThreadList && (
+            <div className="mt-2 max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+              {threads.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-slate-200 px-3 py-3 text-xs text-slate-500">
+                  Inicie uma conversa.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {threads.map((thread) => (
+                    <button
+                      key={thread.id}
+                      type="button"
+                      onClick={() => handleSelectThread(thread.id)}
+                      className={cn(
+                        'w-full rounded-xl border px-3 py-2 text-left text-xs transition',
+                        activeThreadId === thread.id
+                          ? 'border-brand-200 bg-brand-50 text-brand-800'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300',
+                      )}
+                    >
+                      <span className="line-clamp-2 font-medium">{thread.title}</span>
+                      <span className="mt-1 block text-[11px] text-slate-400">
+                        {thread.messageCount} mensagens
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className={cn('min-h-0 flex-1 overflow-y-auto bg-[linear-gradient(180deg,_rgba(248,250,252,0.82)_0%,_rgba(255,255,255,1)_100%)]', compact ? 'px-3 py-3' : 'px-4 py-5')}>
         {loading ? (
           <div className="flex h-full min-h-[220px] items-center justify-center text-sm text-slate-500">
             <Spinner size="sm" label="Carregando conversa..." />
@@ -263,7 +336,7 @@ export function GestanteChatBox({ compact = false, className }: GestanteChatBoxP
         <div ref={endRef} />
       </div>
 
-      <div className={cn('border-t border-slate-100', compact ? 'p-3' : 'p-4')}>
+      <div className={cn('shrink-0 border-t border-slate-100 bg-white', compact ? 'p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]' : 'p-4')}>
         {!compact && (
           <div className="mb-3 flex justify-end md:hidden">
             <button

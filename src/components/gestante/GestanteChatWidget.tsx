@@ -5,9 +5,9 @@ export function GestanteChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className="fixed bottom-5 right-5 z-40">
+    <div className="fixed bottom-2 right-2 z-40 sm:bottom-5 sm:right-5">
       {isOpen ? (
-        <div className="h-[78vh] w-[min(92vw,380px)] overflow-hidden rounded-[20px] border border-slate-200 bg-white shadow-[0_26px_60px_-30px_rgba(15,23,42,0.55)]">
+        <div className="flex h-[min(82dvh,720px)] w-[min(calc(100vw-1rem),380px)] flex-col overflow-hidden rounded-[20px] border border-slate-200 bg-white shadow-[0_26px_60px_-30px_rgba(15,23,42,0.55)] sm:h-[78vh] sm:w-[min(92vw,380px)]">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <div>
               <p className="text-sm font-semibold text-slate-900">Assistente IA</p>
@@ -24,7 +24,7 @@ export function GestanteChatWidget() {
               </svg>
             </button>
           </div>
-          <GestanteChatBox compact className="h-[calc(78vh-53px)] rounded-none border-0" />
+          <GestanteChatBox compact className="min-h-0 flex-1 rounded-none border-0" />
         </div>
       ) : (
         <button

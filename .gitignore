@@ -28,3 +28,6 @@ dist-ssr
 __pycache__/
 **/__pycache__/
 *.py[cod]
+
+# Banco SQLite principal deve ser versionado
+!backend/gestacare.db

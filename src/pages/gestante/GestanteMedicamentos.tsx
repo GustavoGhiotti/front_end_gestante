@@ -10,9 +10,11 @@ import { getMedicamentosGestanteService, updateMedicamentoControleGestante } fro
 import {
   enablePushNotifications,
   getNotificationPermission,
+  getPushSupportStatus,
   isPushSupported,
   sendMedicationPushTest,
   sendPushTestNotification,
+  syncPushSubscription,
 } from '../../services/notifications';
 import type { Medicamento } from '../../types/domain';
 
@@ -197,7 +199,7 @@ function MedicationDetailsModal({
               <div>
                 <p className="text-sm font-medium text-slate-800">Horario do lembrete</p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Quando o backend estiver online, esse horario pode disparar notificacao no celular.
+                  Quando o backend estiver online, esse horario pode disparar notificacao neste dispositivo.
                 </p>
               </div>
               <input
@@ -240,6 +242,7 @@ export function GestanteMedicamentos() {
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(getNotificationPermission());
   const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
   const [testingNotification, setTestingNotification] = useState(false);
+  const pushSupportStatus = getPushSupportStatus();
 
   function loadMeds() {
     if (!user) return;
@@ -303,17 +306,36 @@ export function GestanteMedicamentos() {
   }
 
   async function handleEnableNotifications() {
-    const granted = await enablePushNotifications();
-    const nextPermission = getNotificationPermission();
-    setNotificationPermission(nextPermission);
-    setNotificationMessage(granted ? 'Notificacoes habilitadas neste dispositivo.' : 'Permissao de notificacao nao concedida.');
+    try {
+      const granted = await enablePushNotifications();
+      const nextPermission = getNotificationPermission();
+      setNotificationPermission(nextPermission);
+
+      if (granted) {
+        setNotificationMessage('Notificacoes habilitadas neste dispositivo.');
+        return;
+      }
+
+      if (nextPermission === 'granted') {
+        setNotificationMessage('A permissao foi concedida, mas a assinatura push nao foi registrada. Verifique se o backend esta acessivel neste dispositivo.');
+        return;
+      }
+
+      setNotificationMessage('Permissao de notificacao nao concedida.');
+    } catch {
+      setNotificationPermission(getNotificationPermission());
+      setNotificationMessage('Nao foi possivel registrar este dispositivo para notificacoes. Verifique a conexao com o backend.');
+    }
   }
 
   async function handleSendGeneralTest() {
     setTestingNotification(true);
     try {
+      await syncPushSubscription({ forceRefresh: true });
       const result = await sendPushTestNotification();
       setNotificationMessage(result.detail);
+    } catch {
+      setNotificationMessage('Falha ao enviar o teste. Este dispositivo pode estar sem assinatura push valida.');
     } finally {
       setTestingNotification(false);
     }
@@ -322,8 +344,11 @@ export function GestanteMedicamentos() {
   async function handleSendMedicationTest(med: Medicamento) {
     setTestingNotification(true);
     try {
+      await syncPushSubscription({ forceRefresh: true });
       const result = await sendMedicationPushTest(med.id);
       setNotificationMessage(result.detail);
+    } catch {
+      setNotificationMessage('Falha ao enviar o teste do medicamento. Este dispositivo pode estar sem assinatura push valida.');
     } finally {
       setTestingNotification(false);
     }
@@ -378,10 +403,15 @@ export function GestanteMedicamentos() {
                 <span>As prescricoes sao definidas pelo seu medico. Os lembretes e marcacoes abaixo sao opcionais e servem apenas para sua organizacao pessoal.</span>
               </div>
               <div className="rounded-xl border border-brand-100 bg-brand-50 p-4">
-                <p className="text-sm font-semibold text-slate-800">Notificacoes no celular</p>
+                <p className="text-sm font-semibold text-slate-800">Notificacoes neste dispositivo</p>
                 <p className="mt-1 text-sm text-slate-500">
                   Status atual: {notificationPermission === 'unsupported' ? 'nao suportado neste navegador' : notificationPermission}.
                 </p>
+                {pushSupportStatus === 'insecure_context' ? (
+                  <p className="mt-2 text-xs text-amber-700">
+                    No celular, notificacoes web exigem acesso seguro por HTTPS ou ambiente equivalente de app instalado.
+                  </p>
+                ) : null}
                 <div className="mt-3 flex flex-wrap gap-2">
                   {isPushSupported() && notificationPermission !== 'granted' ? (
                     <button type="button" onClick={handleEnableNotifications} className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700">

@@ -98,6 +98,97 @@ function SemaforoBadgeInline({ status }: { status: 'verde' | 'amarelo' | 'vermel
   );
 }
 
+type ReviewTextParts = {
+  body: string;
+  referencesLabel: string;
+  referencesText: string;
+  referenceItems: string[];
+};
+
+function parseReviewTextParts(text: string, fallbackLabel = 'Referências'): ReviewTextParts {
+  const trimmedText = text.trim();
+  if (!trimmedText) {
+    return {
+      body: '',
+      referencesLabel: fallbackLabel,
+      referencesText: '',
+      referenceItems: [],
+    };
+  }
+
+  const match = /\b(Base consultada|Refer[eê]ncias?)\s*:\s*([\s\S]+)$/i.exec(trimmedText);
+  if (!match || typeof match.index !== 'number') {
+    return {
+      body: trimmedText,
+      referencesLabel: fallbackLabel,
+      referencesText: '',
+      referenceItems: [],
+    };
+  }
+
+  const body = trimmedText.slice(0, match.index).trim();
+  const referencesLabel = match[1];
+  const referencesText = match[2].trim().replace(/\s+$/, '');
+  const normalizedReferences = referencesText.replace(/\.\s*$/, '');
+  const referenceItems = normalizedReferences
+    .split(/\s*;\s*/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return {
+    body,
+    referencesLabel,
+    referencesText,
+    referenceItems,
+  };
+}
+
+function composeReviewTextParts(parts: ReviewTextParts): string {
+  const body = parts.body.trim();
+  const referencesText = parts.referencesText.trim();
+  if (!referencesText) return body;
+
+  const normalizedBody = body && !/[.!?]$/.test(body) ? `${body}.` : body;
+  return `${normalizedBody} ${parts.referencesLabel}: ${referencesText}`.trim();
+}
+
+function ReferencesPanel({
+  label,
+  referencesText,
+  referenceItems,
+}: {
+  label: string;
+  referencesText: string;
+  referenceItems: string[];
+}) {
+  if (!referencesText.trim()) return null;
+
+  return (
+    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-slate-600" aria-hidden="true">
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </span>
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</h4>
+      </div>
+
+      {referenceItems.length > 0 ? (
+        <ul className="mt-3 space-y-2">
+          {referenceItems.map((item, index) => (
+            <li key={`${item}-${index}`} className="rounded-lg bg-white px-3 py-2 text-sm leading-relaxed text-slate-600 ring-1 ring-slate-200">
+              {item}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-sm leading-relaxed text-slate-600">{referencesText}</p>
+      )}
+    </div>
+  );
+}
+
 function DoctorSummaryDetailModal({
   summary,
   reviewSummary,
@@ -111,8 +202,8 @@ function DoctorSummaryDetailModal({
   onClose,
 }: {
   summary: ReviewedSummary;
-  reviewSummary: string;
-  reviewRecommendations: string;
+  reviewSummary: ReviewTextParts;
+  reviewRecommendations: ReviewTextParts;
   onSummaryChange: (value: string) => void;
   onRecommendationsChange: (value: string) => void;
   onApprove: () => void;
@@ -184,9 +275,14 @@ function DoctorSummaryDetailModal({
           </h3>
           <textarea
             rows={6}
-            value={reviewSummary}
+            value={reviewSummary.body}
             onChange={(e) => onSummaryChange(e.target.value)}
             className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-600"
+          />
+          <ReferencesPanel
+            label={reviewSummary.referencesLabel}
+            referencesText={reviewSummary.referencesText}
+            referenceItems={reviewSummary.referenceItems}
           />
         </section>
 
@@ -196,9 +292,14 @@ function DoctorSummaryDetailModal({
           </h3>
           <textarea
             rows={4}
-            value={reviewRecommendations}
+            value={reviewRecommendations.body}
             onChange={(e) => onRecommendationsChange(e.target.value)}
             className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-600"
+          />
+          <ReferencesPanel
+            label={reviewRecommendations.referencesLabel}
+            referencesText={reviewRecommendations.referencesText}
+            referenceItems={reviewRecommendations.referenceItems}
           />
         </section>
 
@@ -228,7 +329,7 @@ function DoctorSummaryDetailModal({
             <button
               type="button"
               onClick={onApprove}
-              disabled={approving || deleting || !reviewSummary.trim()}
+              disabled={approving || deleting || !reviewSummary.body.trim()}
               className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-60"
             >
               {approving ? <Spinner size="sm" /> : null}
@@ -621,14 +722,14 @@ function DoctorAISummariesTab({ patientId, onSuccess }: { patientId: string; onS
   const [filter, setFilter] = useState<DoctorSummaryFilter>('todos');
   const [summaries, setSummaries] = useState<ReviewedSummary[]>([]);
   const [selectedSummaryId, setSelectedSummaryId] = useState<string | null>(null);
-  const [reviewSummary, setReviewSummary] = useState('');
-  const [reviewRecommendations, setReviewRecommendations] = useState('');
+  const [reviewSummary, setReviewSummary] = useState<ReviewTextParts>(() => parseReviewTextParts('', 'Base consultada'));
+  const [reviewRecommendations, setReviewRecommendations] = useState<ReviewTextParts>(() => parseReviewTextParts('', 'Referências'));
   const [detailOpen, setDetailOpen] = useState(false);
 
   function syncSelectedSummary(item: ReviewedSummary | null) {
     setSelectedSummaryId(item?.id ?? null);
-    setReviewSummary(item?.summary ?? '');
-    setReviewRecommendations(item?.recommendations ?? '');
+    setReviewSummary(parseReviewTextParts(item?.summary ?? '', 'Base consultada'));
+    setReviewRecommendations(parseReviewTextParts(item?.recommendations ?? '', 'Referências'));
   }
 
   function loadSummaries() {
@@ -677,8 +778,8 @@ function DoctorAISummariesTab({ patientId, onSuccess }: { patientId: string; onS
     setError(null);
     try {
       const approved = await approvePatientSummary(selectedSummary.id, {
-        summary: reviewSummary,
-        recommendations: reviewRecommendations,
+        summary: composeReviewTextParts(reviewSummary),
+        recommendations: composeReviewTextParts(reviewRecommendations),
       });
       setSummaries((prev) => prev.map((item) => (item.id === approved.id ? approved : item)));
       syncSelectedSummary(approved);
@@ -867,8 +968,8 @@ function DoctorAISummariesTab({ patientId, onSuccess }: { patientId: string; onS
           summary={selectedSummary}
           reviewSummary={reviewSummary}
           reviewRecommendations={reviewRecommendations}
-          onSummaryChange={setReviewSummary}
-          onRecommendationsChange={setReviewRecommendations}
+          onSummaryChange={(value) => setReviewSummary((prev) => ({ ...prev, body: value }))}
+          onRecommendationsChange={(value) => setReviewRecommendations((prev) => ({ ...prev, body: value }))}
           onApprove={handleApprove}
           approving={approving}
           onDelete={handleDeleteSummary}

@@ -31,6 +31,12 @@ def _b64url(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
 
 
+def _normalize_push_key(value: str) -> str:
+    normalized = (value or "").strip().replace("-", "+").replace("_", "/")
+    padding = "=" * ((4 - (len(normalized) % 4)) % 4)
+    return f"{normalized}{padding}"
+
+
 def _ensure_vapid_keys() -> tuple[str, str]:
     private_path = Path(settings.vapid_private_key_path)
     public_path = Path(settings.vapid_public_key_path)
@@ -54,7 +60,9 @@ def _ensure_vapid_keys() -> tuple[str, str]:
     return private_pem, public_key
 
 
-VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY = _ensure_vapid_keys()
+_ensure_vapid_keys()
+VAPID_PRIVATE_KEY_PATH = settings.vapid_private_key_path
+VAPID_PUBLIC_KEY = Path(settings.vapid_public_key_path).read_text(encoding="utf-8").strip()
 
 
 class PushService:
@@ -71,11 +79,13 @@ class PushService:
 
     @staticmethod
     def register_subscription(db: Session, user: User, endpoint: str, p256dh: str, auth: str, user_agent: str | None) -> None:
+        normalized_p256dh = _normalize_push_key(p256dh)
+        normalized_auth = _normalize_push_key(auth)
         existing = db.scalar(select(PushSubscription).where(PushSubscription.endpoint == endpoint))
         if existing:
             existing.user_id = user.id
-            existing.p256dh = p256dh
-            existing.auth = auth
+            existing.p256dh = normalized_p256dh
+            existing.auth = normalized_auth
             existing.user_agent = user_agent
             db.add(existing)
             return
@@ -84,8 +94,8 @@ class PushService:
             PushSubscription(
                 user_id=user.id,
                 endpoint=endpoint,
-                p256dh=p256dh,
-                auth=auth,
+                p256dh=normalized_p256dh,
+                auth=normalized_auth,
                 user_agent=user_agent,
             )
         )
@@ -107,6 +117,15 @@ class PushService:
         return PushService._send_to_subscriptions(db, subscriptions, payload)
 
     @staticmethod
+    def diagnose_send_to_user(db: Session, user_id: str, payload: dict) -> dict:
+        subscriptions = list(db.scalars(select(PushSubscription).where(PushSubscription.user_id == user_id)))
+        return PushService._send_to_subscriptions_result(db, subscriptions, payload)
+
+    @staticmethod
+    def count_user_subscriptions(db: Session, user_id: str) -> int:
+        return len(list(db.scalars(select(PushSubscription.id).where(PushSubscription.user_id == user_id))))
+
+    @staticmethod
     def send_to_role(db: Session, role: str, payload: dict) -> bool:
         user_ids = list(db.scalars(select(User.id).where(User.role == role, User.ativo == True)))  # noqa: E712
         if not user_ids:
@@ -117,7 +136,7 @@ class PushService:
     @staticmethod
     def send_test_to_current_user(db: Session, user: User) -> bool:
         payload = {
-            "title": "GestaCare ativo no celular",
+            "title": "GestaCare ativo neste dispositivo",
             "body": "As notificacoes web foram habilitadas para este usuario.",
             "url": "/doctor/alerts" if user.role == "medico" else "/gestante/medicamentos",
             "tag": f"gestacare-test-{user.role}",
@@ -153,32 +172,57 @@ class PushService:
 
     @staticmethod
     def _send_to_subscriptions(db: Session, subscriptions: list[PushSubscription], payload: dict) -> bool:
+        return PushService._send_to_subscriptions_result(db, subscriptions, payload)["delivered"]
+
+    @staticmethod
+    def _send_to_subscriptions_result(db: Session, subscriptions: list[PushSubscription], payload: dict) -> dict:
         if not PushService.is_available() or not subscriptions:
-            return False
+            return {
+                "delivered": False,
+                "subscription_count": len(subscriptions),
+                "delivered_count": 0,
+                "errors": [],
+            }
 
         delivered = False
+        delivered_count = 0
+        errors: list[str] = []
         for subscription in subscriptions:
             try:
                 webpush(
                     subscription_info={
                         "endpoint": subscription.endpoint,
                         "keys": {
-                            "p256dh": subscription.p256dh,
-                            "auth": subscription.auth,
+                            "p256dh": _normalize_push_key(subscription.p256dh),
+                            "auth": _normalize_push_key(subscription.auth),
                         },
                     },
                     data=json.dumps(payload, ensure_ascii=False),
-                    vapid_private_key=VAPID_PRIVATE_KEY,
+                    vapid_private_key=VAPID_PRIVATE_KEY_PATH,
                     vapid_claims={"sub": settings.web_push_subject},
                 )
                 delivered = True
+                delivered_count += 1
             except WebPushException as exc:  # pragma: no cover - network/runtime path
                 status_code = getattr(getattr(exc, "response", None), "status_code", None)
+                body = getattr(getattr(exc, "response", None), "text", "")
+                detail = f"push provider error{f' {status_code}' if status_code else ''}"
+                if body:
+                  detail = f"{detail}: {str(body).strip()[:180]}"
+                else:
+                  detail = f"{detail}: {str(exc).strip()[:180]}"
+                errors.append(detail)
                 if status_code in {404, 410}:
                     db.delete(subscription)
-            except Exception:
+            except Exception as exc:
+                errors.append(f"unexpected push error: {str(exc).strip()[:180]}")
                 continue
-        return delivered
+        return {
+            "delivered": delivered,
+            "subscription_count": len(subscriptions),
+            "delivered_count": delivered_count,
+            "errors": errors,
+        }
 
     @staticmethod
     def start_scheduler() -> None:

@@ -327,11 +327,26 @@ def send_test_notification(
     db: Session = Depends(get_db),
 ):
     require_push_available()
-    delivered = PushService.send_test_to_current_user(db, current_user)
+    subscription_count = PushService.count_user_subscriptions(db, current_user.id)
+    payload = {
+        "title": "GestaCare ativo neste dispositivo",
+        "body": "As notificacoes web foram habilitadas para este usuario.",
+        "url": "/doctor/alerts" if current_user.role == "medico" else "/gestante/medicamentos",
+        "tag": f"gestacare-test-{current_user.role}",
+    }
+    result = PushService.diagnose_send_to_user(db, current_user.id, payload)
+    delivered = result["delivered"]
     db.commit()
+    if delivered:
+        detail = "Notificacao de teste enviada."
+    elif subscription_count == 0:
+        detail = "Nenhuma assinatura push cadastrada para este usuario."
+    else:
+        first_error = result["errors"][0] if result["errors"] else "causa nao informada"
+        detail = f"Foram encontradas assinaturas push para este usuario, mas a entrega falhou: {first_error}"
     return NotificationTestOut(
         delivered=delivered,
-        detail=("Notificacao de teste enviada." if delivered else "Nenhuma assinatura valida encontrada para este usuario."),
+        detail=detail,
     )
 
 
@@ -438,11 +453,29 @@ def send_medicamento_test_notification(
     if med.gestante_id != gestante.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado a este medicamento.")
 
-    delivered = PushService.send_medication_test(db, current_user, med)
+    subscription_count = PushService.count_user_subscriptions(db, current_user.id)
+    result = PushService.diagnose_send_to_user(
+        db,
+        current_user.id,
+        {
+            "title": "Lembrete de medicamento",
+            "body": f"Hora de conferir {med.nome} ({med.dosagem}).",
+            "url": "/gestante/medicamentos",
+            "tag": f"medication-{med.id}",
+        },
+    )
+    delivered = result["delivered"]
     db.commit()
+    if delivered:
+        detail = "Notificacao de teste enviada."
+    elif subscription_count == 0:
+        detail = "Nenhuma assinatura push cadastrada para este usuario."
+    else:
+        first_error = result["errors"][0] if result["errors"] else "causa nao informada"
+        detail = f"Foram encontradas assinaturas push para este usuario, mas a entrega falhou: {first_error}"
     return NotificationTestOut(
         delivered=delivered,
-        detail=("Notificacao de teste enviada." if delivered else "Nenhuma assinatura valida encontrada para este usuario."),
+        detail=detail,
     )
 
 

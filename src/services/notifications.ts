@@ -5,6 +5,14 @@ type PushPublicKeyOut = {
   enabled: boolean;
 };
 
+export type PushSupportStatus =
+  | 'supported'
+  | 'unsupported'
+  | 'insecure_context'
+  | 'service_worker_unavailable'
+  | 'push_manager_unavailable'
+  | 'notification_unavailable';
+
 let swRegistrationPromise: Promise<ServiceWorkerRegistration | null> | null = null;
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -22,7 +30,17 @@ export function isPushSupported(): boolean {
   return typeof window !== 'undefined'
     && 'serviceWorker' in navigator
     && 'PushManager' in window
-    && 'Notification' in window;
+    && 'Notification' in window
+    && window.isSecureContext;
+}
+
+export function getPushSupportStatus(): PushSupportStatus {
+  if (typeof window === 'undefined') return 'unsupported';
+  if (!window.isSecureContext) return 'insecure_context';
+  if (!('serviceWorker' in navigator)) return 'service_worker_unavailable';
+  if (!('PushManager' in window)) return 'push_manager_unavailable';
+  if (!('Notification' in window)) return 'notification_unavailable';
+  return 'supported';
 }
 
 export function getNotificationPermission(): NotificationPermission | 'unsupported' {
@@ -43,7 +61,13 @@ async function fetchPublicKey(): Promise<PushPublicKeyOut> {
   return data;
 }
 
-export async function syncPushSubscription(): Promise<boolean> {
+async function removePushSubscription(endpoint: string): Promise<void> {
+  await api.delete('/notifications/subscriptions', {
+    data: { endpoint },
+  });
+}
+
+export async function syncPushSubscription(options?: { forceRefresh?: boolean }): Promise<boolean> {
   if (!isPushSupported() || Notification.permission !== 'granted') return false;
 
   const registration = await registerAppServiceWorker();
@@ -53,6 +77,16 @@ export async function syncPushSubscription(): Promise<boolean> {
   if (!publicKey.enabled || !publicKey.publicKey) return false;
 
   let subscription = await registration.pushManager.getSubscription();
+  if (subscription && options?.forceRefresh) {
+    try {
+      await removePushSubscription(subscription.endpoint);
+    } catch {
+      // Ignora falha no cleanup remoto e tenta recriar a assinatura local mesmo assim.
+    }
+    await subscription.unsubscribe();
+    subscription = null;
+  }
+
   if (!subscription) {
     const applicationServerKey = urlBase64ToUint8Array(publicKey.publicKey) as unknown as BufferSource;
     subscription = await registration.pushManager.subscribe({
@@ -78,7 +112,7 @@ export async function enablePushNotifications(): Promise<boolean> {
   if (!isPushSupported()) return false;
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') return false;
-  return syncPushSubscription();
+  return syncPushSubscription({ forceRefresh: true });
 }
 
 export async function sendPushTestNotification(): Promise<{ delivered: boolean; detail: string }> {

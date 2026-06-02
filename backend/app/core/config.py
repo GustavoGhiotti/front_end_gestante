@@ -36,6 +36,14 @@ class Settings(BaseSettings):
     vapid_private_key_path: str = str(BACKEND_DIR / ".vapid" / "private_key.pem")
     vapid_public_key_path: str = str(BACKEND_DIR / ".vapid" / "public_key.txt")
     medication_reminder_poll_seconds: int = 30
+    cors_origin_regex: str = (
+        r"https?://("
+        r"localhost|127\.0\.0\.1|0\.0\.0\.0|"
+        r"10(?:\.\d{1,3}){3}|"
+        r"192\.168(?:\.\d{1,3}){2}|"
+        r"172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2}"
+        r")(?::\d+)?"
+    )
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
